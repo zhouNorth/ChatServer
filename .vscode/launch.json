@@ -1,0 +1,27 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "ChatServer (WSL)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/chatserver/bin/ChatServer",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "MIMode": "gdb",
+            "preLaunchTask": "Build Linux chat programs",
+            "externalConsole": false
+        },
+        {
+            "name": "ChatClient (WSL)",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/chatserver/bin/ChatClient",
+            "args": ["127.0.0.1", "6000"],
+            "cwd": "${workspaceFolder}",
+            "MIMode": "gdb",
+            "preLaunchTask": "Build Linux chat programs",
+            "externalConsole": false
+        }
+    ]
+}

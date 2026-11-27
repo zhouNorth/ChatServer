@@ -2,7 +2,7 @@
 
 基于 C++、Muduo、MySQL、Redis 和 Nginx 的即时通信项目，支持单聊、群聊、离线消息和跨服务端消息转发。
 
-本仓库当前收录项目学习笔记与说明文档。以下架构和功能描述对应笔记所分析的实现，项目源码及部署脚本尚未随本次文档上传。
+本仓库包含完整项目源码、Linux 构建脚本、双节点部署配置、隔离集成测试和项目学习笔记。
 
 ## 项目笔记
 
@@ -88,9 +88,93 @@ TCP 是字节流，一次发送不对应一次接收。实现中先将字节累�
 
 主要表为 `user`、`friend`、`all_group`、`groupuser`、`offlinemsg`。
 
+## 快速开始
+
+### 1. 克隆与编译
+
+在 Ubuntu 或 WSL Ubuntu 中运行：
+
+```bash
+git clone https://github.com/zhouNorth/ChatServer.git
+cd ChatServer
+bash scripts/setup-linux.sh
+```
+
+安装脚本通过 apt 安装构建工具、Boost、MySQL 客户端开发库、hiredis、Redis 和 Nginx stream 模块，并下载、构建 muduo v2.0.2。
+
+后续修改源码后重新编译：
+
+```bash
+bash scripts/build-linux.sh
+```
+
+输出位于 `chatserver/bin/ChatServer` 和 `chatserver/bin/ChatClient`，均为 Linux 可执行程序。
+
+### 2. 配置 MySQL
+
+准备一个可访问的 MySQL 服务和本项目专用数据库。默认表结构位于 [deploy/schema.sql](deploy/schema.sql)。以下环境变量需要在启动服务端的终端中设置：
+
+```bash
+export CHAT_DB_HOST=127.0.0.1
+export CHAT_DB_PORT=3306
+export CHAT_DB_USER=root
+export CHAT_DB_PASSWORD='替换为实际数据库密码'
+export CHAT_DB_NAME=chat
+
+# 在有建库权限的账号下创建数据库；命令会交互式询问密码。
+mysql -h "$CHAT_DB_HOST" -P "$CHAT_DB_PORT" -u "$CHAT_DB_USER" -p \
+  -e "CREATE DATABASE IF NOT EXISTS chat CHARACTER SET utf8mb4;"
+mysql -h "$CHAT_DB_HOST" -P "$CHAT_DB_PORT" -u "$CHAT_DB_USER" -p \
+  "$CHAT_DB_NAME" < deploy/schema.sql
+```
+
+若使用已有表，请先确认字段与源码一致；初始化 SQL 不负责迁移已有表结构。
+
+### 3. 准备 Redis 并启动双节点
+
+先确认 Redis 可用；若本机尚未启动 Redis，可启动一个仅监听本机的开发实例：
+
+```bash
+redis-server --bind 127.0.0.1 --port 6379 --daemonize yes
+redis-cli -p 6379 ping
+
+export CHAT_REDIS_HOST=127.0.0.1
+export CHAT_REDIS_PORT=6379
+export CHAT_REDIS_PREFIX=chat:user:
+# 如果 Redis 启用密码，再设置 CHAT_REDIS_PASSWORD。
+
+bash scripts/run-cluster.sh
+```
+
+启动器运行后端 `6001`、`6002` 和前端 `8000`，保持该终端运行。Ctrl+C 停止启动器管理的服务端与 Nginx 实例。
+
+### 4. 连接客户端
+
+在另外两个终端分别运行：
+
+```bash
+./chatserver/bin/ChatClient 127.0.0.1 8000
+```
+
+注册后使用返回的用户 ID 登录。常用命令：
+
+| 命令 | 用途 |
+| --- | --- |
+| `help` | 查看命令 |
+| `chat:用户ID:内容` | 单聊 |
+| `addfriend:用户ID` | 添加好友 |
+| `creategroup:群名:描述` | 创建群组 |
+| `addgroup:群ID` | 加入群组 |
+| `groupchat:群ID:内容` | 群聊 |
+| `loginout` | 注销并退出客户端 |
+
+当前创建群组尚未返回群 ID，可由数据库或下次登录加载的群列表查看；操作回执等限制见下方说明。
+
+详细步骤参见 [集群运行说明](README-Cluster.md) 和 [Linux 构建说明](README-Linux.md)。
+
 ## 已验证的功能场景
 
-笔记对应的本地工程已通过隔离的 MySQL、Redis、Nginx 和双 ChatServer 集成测试，覆盖：
+本工程已通过隔离的 MySQL、Redis、Nginx 和双 ChatServer 集成测试，覆盖：
 
 - 经 Nginx 连接不同后端的双向单聊和群聊。
 - 重复登录拒绝、离线回退、大消息及 UTF-8 消息。
@@ -99,6 +183,15 @@ TCP 是字节流，一次发送不对应一次接收。实现中先将字节累�
 - 用户退订、Redis 重连恢复及单进程退出隔离。
 
 这些是功能验证，不代表已经完成高并发压测；本项目不提供未经测量的吞吐量或延迟指标。
+
+复现测试需要 MySQL 服务端二进制，测试会使用临时数据库目录和随机端口：
+
+```bash
+sudo apt-get install -y default-mysql-server
+sudo python3 -u tests/cluster_integration.py
+```
+
+测试不访问已有业务数据库，结束后清理自己启动的临时服务。
 
 ## 当前边界
 
@@ -110,13 +203,23 @@ TCP 是字节流，一次发送不对应一次接收。实现中先将字节累�
 - 进程崩溃可能残留数据库在线状态，尚未实现分布式会话租约。
 - 好友审批、群成员权限、密码哈希和参数化 SQL 尚未全面完善。
 
-## 文档目录
+## 仓库目录
 
 ```text
 ChatServer/
 ├── README.md
-└── docs/
-    └── ChatServer-notes.docx
+├── README-Cluster.md          # 集群运行与可靠性边界
+├── README-Linux.md            # Linux 与 WSL 构建
+├── chatserver/
+│   ├── CMakeLists.txt
+│   ├── include/              # 业务与数据模型头文件
+│   ├── src/client/           # 客户端
+│   ├── src/server/           # 网络层 业务层 MySQL Redis
+│   └── thirdparty/json.hpp   # 随项目保留的 JSON 头文件
+├── deploy/                   # Nginx 配置与数据库表结构
+├── scripts/                  # 安装 构建 双节点启动
+├── tests/                    # 隔离集成测试
+└── docs/ChatServer-notes.docx # 项目学习笔记
 ```
 
 笔记内容以当前实现为基础，明确区分已实现功能、学习示例和后续优化方向。

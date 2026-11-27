@@ -1,0 +1,25 @@
+# Local dependencies, generated output and temporary services
+.deps/
+.run/
+.codex-backups/
+.vs/
+**/build/
+**/bin/
+**/obj/
+__pycache__/
+*.pyc
+*.log
+*.pid
+core
+core.*
+
+# Local environment and credentials
+.env
+.env.*
+!.env.example
+*.vcxproj.user
+*.lnk
+
+# Local document generation intermediates
+artifacts/
+~$*

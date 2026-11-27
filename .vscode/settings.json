@@ -1,0 +1,7 @@
+{
+    "cmake.sourceDirectory": "${workspaceFolder}/chatserver",
+    "files.encoding": "utf8",
+    "files.autoGuessEncoding": true,
+    "cmake.buildDirectory": "${workspaceFolder}/chatserver/build",
+    "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools"
+}
